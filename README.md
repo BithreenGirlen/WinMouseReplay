@@ -43,5 +43,5 @@ The record feature can be used just to know the position of the mouse, for examp
 3. Press "shift" + "delete" when you stop replaying.
 
 ## Remarks
-Stopping replaying uses hot-key registration. If the registraion would conflict with other applications, a message window would appear.  
+Stopping replaying uses hot-key registration. If the registraion would conflict with other applications, a message box would appear.  
 "Clear" button clears the reocrd in memory and messages on the window.
