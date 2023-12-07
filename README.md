@@ -34,7 +34,7 @@ X:939, Y:568, D:424;
 
 `X` and `Y` are coordinates, and `D` is the time in milliseconds passed from the previous input.
 
-The record feature can be used just to know the position of the mouse, for example, to modify the previously created record, or to know the area where you want to avoid clicking.
+The record feature can be used just to know the position of the mouse, for example, to modify the previously created record, or to know the area wchch you want to avoid clicking.
 
 ### Replay
 
