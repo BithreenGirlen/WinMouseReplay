@@ -1,136 +1,135 @@
-
+Ôªø
 #include <process.h>
 
 #include "mouse_record.h"
 
 CMouseRecord::CMouseRecord(HWND hWnd)
-	:m_hRetWnd(hWnd)
+    :m_hRetWnd(hWnd)
 {
 
 }
 
 CMouseRecord::~CMouseRecord()
 {
-	EndRecord();
+    EndRecording();
 }
 
-bool CMouseRecord::StartRecord()
+bool CMouseRecord::StartRecording()
 {
-	if (m_hThread == INVALID_HANDLE_VALUE)
-	{
-		m_hThread = reinterpret_cast<HANDLE>(_beginthread(&ThreadLauncher, 0, this));
-		if (m_hThread != INVALID_HANDLE_VALUE)
-		{
-			m_thread_running = true;
-			return true;
-		}
-	}
-	/*é∏îs*/
-	EndRecord();
+    if (m_hThread == INVALID_HANDLE_VALUE)
+    {
+        m_hThread = reinterpret_cast<HANDLE>(_beginthread(&ThreadLauncher, 0, this));
+        if (m_hThread != INVALID_HANDLE_VALUE)
+        {
+            m_bThreadRunning = true;
+            return true;
+        }
+    }
+    /*Â§±Êïó*/
+    EndRecording();
 
-	return false;
+    return false;
 }
 
-/*ãLò^ï€ë∂*/
-bool CMouseRecord::SaveRecord(const char* file_name)
+/*Ë®òÈå≤‰øùÂ≠ò*/
+bool CMouseRecord::SaveRecord(const char* pzFileName)
 {
-	if (file_name != nullptr)
-	{
-		HANDLE hFile = ::CreateFileA(file_name, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
-		if (hFile != INVALID_HANDLE_VALUE)
-		{
-			::SetFilePointer(hFile, NULL, nullptr, FILE_END);
-			for (size_t i = 0; i < m_point.size(); ++i)
-			{
-				char buffer[256]{};
-				sprintf_s(buffer, "X:%ld, Y:%ld, D:%lld;\r\n", m_point.at(i).x, m_point.at(i).y, m_delay.at(i));
-				DWORD bytesWrite = 0;
-				BOOL bRet = ::WriteFile(hFile, buffer, static_cast<DWORD>(strlen(buffer)), &bytesWrite, nullptr);
-				if (!bRet)
-				{
-					::CloseHandle(hFile);
-					return false;
-				}
-			}
-			::CloseHandle(hFile);
-			ClearRecord();
-			return true;
-		}
-	}
-	return false;
+    if (pzFileName != nullptr)
+    {
+        HANDLE hFile = ::CreateFileA(pzFileName, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+        if (hFile != INVALID_HANDLE_VALUE)
+        {
+            ::SetFilePointer(hFile, NULL, nullptr, FILE_END);
+            for (size_t i = 0; i < m_points.size(); ++i)
+            {
+                char sBuffer[256]{};
+                sprintf_s(sBuffer, "X:%ld, Y:%ld, D:%lld, E:%u;\r\n", m_points.at(i).x, m_points.at(i).y, m_nDelay.at(i), 0);
+                DWORD bytesWrite = 0;
+                BOOL bRet = ::WriteFile(hFile, sBuffer, static_cast<DWORD>(strlen(sBuffer)), &bytesWrite, nullptr);
+                if (!bRet)
+                {
+                    ::CloseHandle(hFile);
+                    return false;
+                }
+            }
+            ::CloseHandle(hFile);
+            ClearRecord();
+            return true;
+        }
+    }
+    return false;
 }
 
-/*ãLò^è¡ãé*/
+/*Ë®òÈå≤Ê∂àÂéª*/
 void CMouseRecord::ClearRecord()
 {
-	m_point.clear();
-	m_delay.clear();
+    m_points.clear();
+    m_nDelay.clear();
 }
 
-void CMouseRecord::EndRecord()
+void CMouseRecord::EndRecording()
 {
-	m_thread_running = false;
-	if (m_hThread != INVALID_HANDLE_VALUE)
-	{
-		::WaitForSingleObject(m_hThread, INFINITE);
-	}
+    m_bThreadRunning = false;
+    if (m_hThread != INVALID_HANDLE_VALUE)
+    {
+        ::WaitForSingleObject(m_hThread, INFINITE);
+    }
 }
 
 void CMouseRecord::ThreadLauncher(void* args)
 {
-	static_cast<CMouseRecord*>(args)->RecordingThread();
+    static_cast<CMouseRecord*>(args)->RecordingThread();
 }
 
 void CMouseRecord::RecordingThread()
 {
+    if (m_hRetWnd != nullptr)
+    {
+        ::PostMessageW(m_hRetWnd, wm_mouse_record::out::Start, 0, 0);
+    }
 
-	if (m_hRetWnd != nullptr)
-	{
-		::PostMessageW(m_hRetWnd, wm_mouse_record::out::Start, 0, 0);
-	}
+    long long last = GetNowTime();
 
-	long long last = GetNowTime();
+    for (;;)
+    {
+        if (!m_bThreadRunning)break;
+        bool bRet = CheckKey(VK_INSERT);
+        if (bRet)
+        {
+            POINT P {};
+            ::GetCursorPos(&P);
+            m_points.push_back(P);
 
-	for (;;)
-	{
-		if (!m_thread_running)break;
-		bool bRet = CheckKey(VK_INSERT);
-		if (bRet)
-		{
-			POINT P {};
-			GetCursorPos(&P);
-			m_point.push_back(P);
+            long long now = GetNowTime();
+            m_nDelay.push_back(now - last);
+            last = now;
+            if (m_hRetWnd != nullptr)
+            {
+                ::PostMessageW(m_hRetWnd, wm_mouse_record::out::Record, m_points.size(), reinterpret_cast<LPARAM>(&m_points.back()));
+            }
+        }
+        bRet = CheckKey(VK_DELETE);
+        if (bRet)break;
+    }
 
-			long long now = GetNowTime();
-			m_delay.push_back(now - last);
-			last = now;
-			if (m_hRetWnd != nullptr)
-			{
-				::PostMessageW(m_hRetWnd, wm_mouse_record::out::Record, m_point.size(), reinterpret_cast<LPARAM>(&m_point.back()));
-			}
-		}
-		bRet = CheckKey(VK_DELETE);
-		if (bRet)break;
-	}
+    if (m_hRetWnd != nullptr)
+    {
+        ::PostMessageW(m_hRetWnd, wm_mouse_record::out::End, 0, 0);
+    }
 
-	if (m_hRetWnd != nullptr)
-	{
-		::PostMessageW(m_hRetWnd, wm_mouse_record::out::End, 0, 0);
-	}
-
-	m_hThread = INVALID_HANDLE_VALUE;
+    m_hThread = INVALID_HANDLE_VALUE;
 }
 
 bool CMouseRecord::CheckKey(short key_code)
 {
-	return GetAsyncKeyState(key_code) & 0x01;
+    return ::GetAsyncKeyState(key_code) & 0x01;
 }
 
 long long CMouseRecord::GetNowTime()
 {
-	LARGE_INTEGER freq, ticks;
-	QueryPerformanceFrequency(&freq);
-	QueryPerformanceCounter(&ticks);
-	double tm = 1000LL / static_cast<double>(freq.QuadPart);
-	return static_cast<long long>(ticks.QuadPart * tm);
+    LARGE_INTEGER freq, ticks;
+    ::QueryPerformanceFrequency(&freq);
+    ::QueryPerformanceCounter(&ticks);
+    double tm = 1000LL / static_cast<double>(freq.QuadPart);
+    return static_cast<long long>(ticks.QuadPart * tm);
 }
