@@ -1,29 +1,34 @@
+Ôªø
+#include <Windows.h>
+#include <CommCtrl.h>
 
-#include "Resource.h"
 #include "main_window.h"
-#include "file_operation.h"
+#include "win_dialogue.h"
+#include "win_text.h"
 
 CMainWindow::CMainWindow()
 {
-    m_hFont = CreateFont(Constants::kFontSize, 0, 0, 0, FW_REGULAR, FALSE, FALSE, FALSE, EASTEUROPE_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"DFKai-SB");
+    m_hFont = ::CreateFont(Constants::kFontSize, 0, 0, 0, FW_REGULAR, FALSE, FALSE, FALSE, EASTEUROPE_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH, L"DFKai-SB");
 }
 
 CMainWindow::~CMainWindow()
 {
     DeleteObject(m_hFont);
 
-    if (m_mouse_record != nullptr)
+    if (m_pMouseRecorder != nullptr)
     {
-        delete m_mouse_record;
+        delete m_pMouseRecorder;
+        m_pMouseRecorder = nullptr;
     }
 
-    if (m_mouse_replay != nullptr)
+    if (m_pMouseReplayer != nullptr)
     {
-        delete m_mouse_replay;
+        delete m_pMouseReplayer;
+        m_pMouseReplayer = nullptr;
     }
 }
 
-bool CMainWindow::Create(HINSTANCE hInstance)
+bool CMainWindow::Create(HINSTANCE hInstance, const wchar_t* pwzWindowName)
 {
     WNDCLASSEXW wcex{};
 
@@ -34,18 +39,18 @@ bool CMainWindow::Create(HINSTANCE hInstance)
     wcex.cbClsExtra = 0;
     wcex.cbWndExtra = 0;
     wcex.hInstance = hInstance;
-    wcex.hIcon = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_WINMOUSEREPLAY));
-    wcex.hCursor = LoadCursor(nullptr, IDC_ARROW);
-    wcex.hbrBackground = GetSysColorBrush(COLOR_BTNFACE);
-    wcex.lpszMenuName = MAKEINTRESOURCEW(IDI_WINMOUSEREPLAY);
-    wcex.lpszClassName = m_class_name.c_str();
-    wcex.hIconSm = LoadIcon(wcex.hInstance, MAKEINTRESOURCE(IDI_SMALL));
+    //wcex.hIcon = ::LoadIcon(hInstance, MAKEINTRESOURCE(IDI_ICON_APP));
+    wcex.hCursor = ::LoadCursor(nullptr, IDC_ARROW);
+    wcex.hbrBackground = ::GetSysColorBrush(COLOR_BTNFACE);
+    //wcex.lpszMenuName = MAKEINTRESOURCE(IDI_ICON_APP);
+    wcex.lpszClassName = m_swzClassName;
+    //wcex.hIconSm = ::LoadIcon(wcex.hInstance, MAKEINTRESOURCE(IDI_ICON_APP));
 
-    if (RegisterClassExW(&wcex))
+    if (::RegisterClassExW(&wcex))
     {
         m_hInstance = hInstance;
 
-        m_hWnd = CreateWindowW(m_class_name.c_str(), m_window_name.c_str(), WS_OVERLAPPEDWINDOW,
+        m_hWnd = ::CreateWindowW(m_swzClassName, pwzWindowName, WS_OVERLAPPEDWINDOW,
             CW_USEDEFAULT, CW_USEDEFAULT, 200, 200, nullptr, nullptr, hInstance, this);
         if (m_hWnd != nullptr)
         {
@@ -53,41 +58,41 @@ bool CMainWindow::Create(HINSTANCE hInstance)
         }
         else
         {
-            std::wstring wstrMessage = L"CreateWindowExW failed; code: " + std::to_wstring(GetLastError());
-            MessageBoxW(nullptr, wstrMessage.c_str(), L"Error", MB_ICONERROR);
+            std::wstring wstrMessage = L"CreateWindowExW failed; code: " + std::to_wstring(::GetLastError());
+            ::MessageBoxW(nullptr, wstrMessage.c_str(), L"Error", MB_ICONERROR);
         }
     }
     else
     {
-        std::wstring wstrMessage = L"RegisterClassW failed; code: " + std::to_wstring(GetLastError());
-        MessageBoxW(nullptr, wstrMessage.c_str(), L"Error", MB_ICONERROR);
+        std::wstring wstrMessage = L"RegisterClassW failed; code: " + std::to_wstring(::GetLastError());
+        ::MessageBoxW(nullptr, wstrMessage.c_str(), L"Error", MB_ICONERROR);
     }
 
-	return false;
+    return false;
 }
 
-int CMainWindow::MesaageLoop()
+int CMainWindow::MessageLoop()
 {
     MSG msg;
 
     for (;;)
     {
-        BOOL bRet = GetMessageW(&msg, 0, 0, 0);
+        BOOL bRet = ::GetMessageW(&msg, 0, 0, 0);
         if (bRet > 0)
         {
-            TranslateMessage(&msg);
-            DispatchMessageW(&msg);
+            ::TranslateMessage(&msg);
+            ::DispatchMessageW(&msg);
         }
         else if (bRet == 0)
         {
-            /*ÉãÅ[ÉvèIóπ*/
+            /*„É´„Éº„ÉóÁµÇ‰∫Ü*/
             return static_cast<int>(msg.wParam);
         }
         else
         {
-            /*ÉãÅ[ÉvàŸèÌ*/
-            std::wstring wstrMessage = L"GetMessageW failed; code: " + std::to_wstring(GetLastError());
-            MessageBoxW(nullptr, wstrMessage.c_str(), L"Error", MB_ICONERROR);
+            /*„É´„Éº„ÉóÁï∞Â∏∏*/
+            std::wstring wstrMessage = L"GetMessageW failed; code: " + std::to_wstring(::GetLastError());
+            ::MessageBoxW(nullptr, wstrMessage.c_str(), L"Error", MB_ICONERROR);
             return -1;
         }
     }
@@ -101,18 +106,18 @@ LRESULT CMainWindow::WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
     {
         LPCREATESTRUCT pCreateStruct = reinterpret_cast<LPCREATESTRUCT>(lParam);
         pThis = reinterpret_cast<CMainWindow*>(pCreateStruct->lpCreateParams);
-        SetWindowLongPtr(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(pThis));
+        ::SetWindowLongPtr(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(pThis));
     }
 
-    pThis = reinterpret_cast<CMainWindow*>(GetWindowLongPtr(hWnd, GWLP_USERDATA));
+    pThis = reinterpret_cast<CMainWindow*>(::GetWindowLongPtr(hWnd, GWLP_USERDATA));
     if (pThis != nullptr)
     {
         return pThis->HandleMessage(hWnd, uMsg, wParam, lParam);
     }
 
-    return DefWindowProcW(hWnd, uMsg, wParam, lParam);
+    return ::DefWindowProcW(hWnd, uMsg, wParam, lParam);
 }
-/*ÉÅÉbÉZÅ[ÉWèàóù*/
+/*„É°„ÉÉ„Çª„Éº„Ç∏Âá¶ÁêÜ*/
 LRESULT CMainWindow::HandleMessage(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
     switch (uMsg)
@@ -157,7 +162,7 @@ LRESULT CMainWindow::OnCreate(HWND hWnd)
 {
     m_hWnd = hWnd;
 
-    m_hListView = CreateWindowExW(WS_EX_CLIENTEDGE, WC_LISTVIEWW, L"", WS_VISIBLE | WS_CHILD | LVS_REPORT | LVS_ALIGNLEFT | WS_TABSTOP | LVS_SINGLESEL, 0, 0, 0, 0, m_hWnd, nullptr, m_hInstance, nullptr);
+    m_hListView = ::CreateWindowExW(WS_EX_CLIENTEDGE, WC_LISTVIEWW, L"", WS_VISIBLE | WS_CHILD | LVS_REPORT | LVS_ALIGNLEFT | WS_TABSTOP | LVS_SINGLESEL, 0, 0, 0, 0, m_hWnd, nullptr, m_hInstance, nullptr);
     if (m_hListView != nullptr)
     {
         ListView_SetExtendedListViewStyle(m_hListView, LVS_EX_DOUBLEBUFFER | LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES);
@@ -165,28 +170,28 @@ LRESULT CMainWindow::OnCreate(HWND hWnd)
         LVCOLUMNW lvColumn{};
         lvColumn.mask = LVCF_TEXT | LVCF_SUBITEM | LVCF_FMT | LVCF_WIDTH;
         lvColumn.fmt = LVCFMT_LEFT;
-        for (int i = 0; i < m_column_name.size(); ++i)
+        for (int i = 0; i < m_columnNames.size(); ++i)
         {
             lvColumn.iSubItem = i;
-            lvColumn.pszText = const_cast<LPWSTR>(m_column_name.at(i).data());
+            lvColumn.pszText = const_cast<LPWSTR>(m_columnNames.at(i).data());
             ListView_InsertColumn(m_hListView, i, &lvColumn);
         }
     }
 
-    m_hListBox = CreateWindowExW(0, WC_LISTBOX, L"Message", WS_VISIBLE | WS_CHILD | WS_BORDER | LBS_SORT | LBS_NOINTEGRALHEIGHT | WS_VSCROLL, 0, 0, 0, 0, m_hWnd, nullptr, m_hInstance, nullptr);
+    m_hListBox = ::CreateWindowExW(0, WC_LISTBOX, L"Message", WS_VISIBLE | WS_CHILD | WS_BORDER | LBS_SORT | LBS_NOINTEGRALHEIGHT | WS_VSCROLL, 0, 0, 0, 0, m_hWnd, nullptr, m_hInstance, nullptr);
 
-    m_hRecordButton = CreateWindowExW(0, WC_BUTTONW, L"Record", WS_VISIBLE | WS_CHILD | WS_TABSTOP | BS_PUSHBUTTON, 0, 0, 0, 0, m_hWnd, reinterpret_cast<HMENU>(Controls::record_button), m_hInstance, nullptr);
+    m_hRecordButton = ::CreateWindowExW(0, WC_BUTTONW, L"Record", WS_VISIBLE | WS_CHILD | WS_TABSTOP | BS_PUSHBUTTON, 0, 0, 0, 0, m_hWnd, reinterpret_cast<HMENU>(Controls::kRecordButton), m_hInstance, nullptr);
 
-    m_hClearButton = CreateWindowExW(0, WC_BUTTONW, L"Clear", WS_VISIBLE | WS_CHILD | WS_TABSTOP | BS_PUSHBUTTON, 0, 0, 0, 0, m_hWnd, reinterpret_cast<HMENU>(Controls::clear_button), m_hInstance, nullptr);
+    m_hClearButton = ::CreateWindowExW(0, WC_BUTTONW, L"Clear", WS_VISIBLE | WS_CHILD | WS_TABSTOP | BS_PUSHBUTTON, 0, 0, 0, 0, m_hWnd, reinterpret_cast<HMENU>(Controls::kClearButton), m_hInstance, nullptr);
 
-    m_hSaveButton = CreateWindowExW(0, WC_BUTTONW, L"Save", WS_VISIBLE | WS_CHILD | WS_TABSTOP | BS_PUSHBUTTON, 0, 0, 0, 0, m_hWnd, reinterpret_cast<HMENU>(Controls::save_button), m_hInstance, nullptr);
+    m_hSaveButton = ::CreateWindowExW(0, WC_BUTTONW, L"Save", WS_VISIBLE | WS_CHILD | WS_TABSTOP | BS_PUSHBUTTON, 0, 0, 0, 0, m_hWnd, reinterpret_cast<HMENU>(Controls::kSaveButton), m_hInstance, nullptr);
 
-    m_hReplayButton = CreateWindowExW(0, WC_BUTTONW, L"Replay", WS_VISIBLE | WS_CHILD | WS_TABSTOP | BS_PUSHBUTTON, 0, 0, 0, 0, m_hWnd, reinterpret_cast<HMENU>(Controls::replay_button), m_hInstance, nullptr);
+    m_hReplayButton = ::CreateWindowExW(0, WC_BUTTONW, L"Replay", WS_VISIBLE | WS_CHILD | WS_TABSTOP | BS_PUSHBUTTON, 0, 0, 0, 0, m_hWnd, reinterpret_cast<HMENU>(Controls::kReplayButton), m_hInstance, nullptr);
 
-    EnumChildWindows(m_hWnd, SetFontCallback, reinterpret_cast<LPARAM>(m_hFont));
+    ::EnumChildWindows(m_hWnd, SetFontCallback, reinterpret_cast<LPARAM>(m_hFont));
 
-    m_mouse_record = new CMouseRecord(m_hWnd);
-    m_mouse_replay = new CMouseReplay(m_hWnd);
+    m_pMouseRecorder = new CMouseRecord(m_hWnd);
+    m_pMouseReplayer = new CMouseReplay(m_hWnd);
 
     BOOL bRet = ::RegisterHotKey(m_hWnd, Constants::kHotKeyId, MOD_SHIFT, VK_DELETE);
     if (bRet)
@@ -196,7 +201,7 @@ LRESULT CMainWindow::OnCreate(HWND hWnd)
     else
     {
         std::wstring wstrMessage = L"RegisterHotKey failed; code: " + std::to_wstring(GetLastError());
-        MessageBoxW(nullptr, wstrMessage.c_str(), L"Error", MB_ICONERROR);
+        ::MessageBoxW(nullptr, wstrMessage.c_str(), L"Error", MB_ICONERROR);
     }
 
     return 0;
@@ -210,15 +215,23 @@ LRESULT CMainWindow::OnDestroy()
         m_bHotKeyRegistered = false;
     }
 
-    PostQuitMessage(0);
+    ::PostQuitMessage(0);
+    return 0;
+}
+/*WM_CLOSE*/
+LRESULT CMainWindow::OnClose()
+{
+    ::DestroyWindow(m_hWnd);
+    ::UnregisterClassW(m_swzClassName, m_hInstance);
+
     return 0;
 }
 /*WM_PAINT*/
 LRESULT CMainWindow::OnPaint()
 {
     PAINTSTRUCT ps;
-    HDC hdc = BeginPaint(m_hWnd, &ps);
-    EndPaint(m_hWnd, &ps);
+    HDC hdc = ::BeginPaint(m_hWnd, &ps);
+    ::EndPaint(m_hWnd, &ps);
     return 0;
 }
 /*WM_SIZE*/
@@ -240,16 +253,16 @@ LRESULT CMainWindow::OnCommand(WPARAM wParam)
     int wmId = LOWORD(wParam);
     switch (wmId)
     {
-    case Controls::record_button:
+    case Controls::kRecordButton:
         OnRecordButton();
         break;
-    case Controls::clear_button:
+    case Controls::kClearButton:
         OnClearButton();
         break;
-    case Controls::save_button:
+    case Controls::kSaveButton:
         OnSaveButton();
         break;
-    case Controls::replay_button:
+    case Controls::kReplayButton:
         OnReplayButton();
         break;
     }
@@ -260,22 +273,22 @@ LRESULT CMainWindow::OnHotKey(WPARAM wParam, LPARAM lParam)
 {
     if (wParam == Constants::kHotKeyId && lParam & MOD_SHIFT)
     {
-        if (m_mouse_replay != nullptr)
+        if (m_pMouseReplayer != nullptr)
         {
-            m_mouse_replay->EndReplay();
+            m_pMouseReplayer->EndReplay();
         }
     }
     return 0;
 }
-/*é©êgÇÃëãògê°ñ@éÊìæ*/
+/*Ëá™Ë∫´„ÅÆÁ™ìÊû†ÂØ∏Ê≥ïÂèñÂæó*/
 void CMainWindow::GetClientAreaSize(long& width, long& height)
 {
     RECT rect;
-    GetClientRect(m_hWnd, &rect);
+    ::GetClientRect(m_hWnd, &rect);
     width = rect.right - rect.left;
     height = rect.bottom - rect.top;
 }
-/*ListView à íuÅEëÂÇ´Ç≥í≤êÆ*/
+/*ListView ‰ΩçÁΩÆ„ÉªÂ§ß„Åç„ÅïË™øÊï¥*/
 void CMainWindow::ResizeListView()
 {
     if (m_hListView != nullptr)
@@ -284,20 +297,20 @@ void CMainWindow::ResizeListView()
         GetClientAreaSize(w, h);
         long x_space = w / 100;
         long y_space = h / 100;
-        MoveWindow(m_hListView, x_space, h/2 - y_space, w/2 - x_space, h/2, TRUE);
+        ::MoveWindow(m_hListView, x_space, h / 2 - y_space, w / 2 - x_space, h / 2, TRUE);
 
         RECT rect;
-        GetWindowRect(m_hListView, &rect);
+        ::GetWindowRect(m_hListView, &rect);
         LVCOLUMNW lvColumn{};
         lvColumn.mask = LVCF_WIDTH;
-        lvColumn.cx = (rect.right - rect.left) / static_cast<int>(m_column_name.size());
-        for (int i = 0; i < m_column_name.size(); ++i)
+        lvColumn.cx = (rect.right - rect.left) / static_cast<int>(m_columnNames.size());
+        for (int i = 0; i < m_columnNames.size(); ++i)
         {
             ListView_SetColumn(m_hListView, i, &lvColumn);
         }
     }
 }
-/*í ímóì à íuÅEëÂÇ´Ç≥í≤êÆ*/
+/*ÈÄöÁü•Ê¨Ñ ‰ΩçÁΩÆ„ÉªÂ§ß„Åç„ÅïË™øÊï¥*/
 void CMainWindow::ResizeListBox()
 {
     if (m_hListBox != nullptr)
@@ -306,10 +319,10 @@ void CMainWindow::ResizeListBox()
         GetClientAreaSize(w, h);
         long x_space = w / 100;
         long y_space = h / 100;
-        MoveWindow(m_hListBox, w/2 + x_space, h/2 - y_space, w/2 - x_space * 2, h/2, TRUE);
+        ::MoveWindow(m_hListBox, w / 2 + x_space, h / 2 - y_space, w / 2 - x_space * 2, h / 2, TRUE);
     }
 }
-/*ãLò^É{É^Éì à íuÅEëÂÇ´Ç≥í≤êÆ*/
+/*Ë®òÈå≤„Éú„Çø„É≥ ‰ΩçÁΩÆ„ÉªÂ§ß„Åç„ÅïË™øÊï¥*/
 void CMainWindow::ResizeRecordButton()
 {
     if (m_hRecordButton != nullptr)
@@ -318,7 +331,7 @@ void CMainWindow::ResizeRecordButton()
         GetClientAreaSize(w, h);
         long x_space = w / 100;
         long y_space = h / 100;
-        MoveWindow(m_hRecordButton, x_space, y_space, Constants::kButtonWidth, Constants::kFontSize * 2, TRUE);
+        ::MoveWindow(m_hRecordButton, x_space, y_space, Constants::kButtonWidth, Constants::kFontSize * 2, TRUE);
     }
 }
 void CMainWindow::ResizeClearButton()
@@ -329,7 +342,7 @@ void CMainWindow::ResizeClearButton()
         GetClientAreaSize(w, h);
         long x_space = w / 100;
         long y_space = h / 100;
-        MoveWindow(m_hClearButton, x_space, y_space * 2 + Constants::kFontSize * 2, Constants::kButtonWidth, Constants::kFontSize * 2, TRUE);
+        ::MoveWindow(m_hClearButton, x_space, y_space * 2 + Constants::kFontSize * 2, Constants::kButtonWidth, Constants::kFontSize * 2, TRUE);
     }
 }
 void CMainWindow::ResizeSaveButton()
@@ -340,7 +353,7 @@ void CMainWindow::ResizeSaveButton()
         GetClientAreaSize(w, h);
         long x_space = w / 100;
         long y_space = h / 100;
-        MoveWindow(m_hSaveButton, x_space * 2 + Constants::kButtonWidth, y_space, Constants::kButtonWidth, Constants::kFontSize * 2, TRUE);
+        ::MoveWindow(m_hSaveButton, x_space * 2 + Constants::kButtonWidth, y_space, Constants::kButtonWidth, Constants::kFontSize * 2, TRUE);
     }
 }
 void CMainWindow::ResizeReplayButton()
@@ -351,42 +364,42 @@ void CMainWindow::ResizeReplayButton()
         GetClientAreaSize(w, h);
         long x_space = w / 100;
         long y_space = h / 100;
-        MoveWindow(m_hReplayButton, x_space * 2 + Constants::kButtonWidth, y_space * 2 + +Constants::kFontSize * 2, Constants::kButtonWidth, Constants::kFontSize * 2, TRUE);
+        ::MoveWindow(m_hReplayButton, x_space * 2 + Constants::kButtonWidth, y_space * 2 + +Constants::kFontSize * 2, Constants::kButtonWidth, Constants::kFontSize * 2, TRUE);
     }
 }
 /*EnumChildWindows CALLBACK*/
 BOOL CMainWindow::SetFontCallback(HWND hWnd, LPARAM lParam)
 {
-    SendMessage(hWnd, WM_SETFONT, static_cast<WPARAM>(lParam), 0);
-    /*TRUE: ë±çs, FALSE: èIóπ*/
+    ::SendMessage(hWnd, WM_SETFONT, static_cast<WPARAM>(lParam), 0);
+    /*TRUE: Á∂öË°å, FALSE: ÁµÇ‰∫Ü*/
     return TRUE;
 }
-/*É{É^ÉìóLå¯ÅEñ≥å¯êÿÇËë÷Ç¶*/
+/*„Éú„Çø„É≥ÊúâÂäπ„ÉªÁÑ°ÂäπÂàá„ÇäÊõø„Åà*/
 void CMainWindow::SwitchButton()
 {
     switch (m_mode)
     {
     case Mode::Idle:
-        EnableWindow(m_hRecordButton, TRUE);
-        EnableWindow(m_hSaveButton, TRUE);
-        EnableWindow(m_hClearButton, TRUE);
-        EnableWindow(m_hReplayButton, TRUE);
+        ::EnableWindow(m_hRecordButton, TRUE);
+        ::EnableWindow(m_hSaveButton, TRUE);
+        ::EnableWindow(m_hClearButton, TRUE);
+        ::EnableWindow(m_hReplayButton, TRUE);
         break;
     case Mode::Recording:
     case Mode::Replaying:
-        EnableWindow(m_hRecordButton, FALSE);
-        EnableWindow(m_hSaveButton, FALSE);
-        EnableWindow(m_hClearButton, FALSE);
-        EnableWindow(m_hReplayButton, FALSE);
+        ::EnableWindow(m_hRecordButton, FALSE);
+        ::EnableWindow(m_hSaveButton, FALSE);
+        ::EnableWindow(m_hClearButton, FALSE);
+        ::EnableWindow(m_hReplayButton, FALSE);
         break;
     }
 }
-/*ãLò^É{É^Éì*/
+/*Ë®òÈå≤„Éú„Çø„É≥*/
 void CMainWindow::OnRecordButton()
 {
-    if (m_mouse_record != nullptr)
+    if (m_pMouseRecorder != nullptr)
     {
-        bool bRet = m_mouse_record->StartRecord();
+        bool bRet = m_pMouseRecorder->StartRecording();
         if (bRet)
         {
             m_mode = Mode::Recording;
@@ -394,75 +407,63 @@ void CMainWindow::OnRecordButton()
         }
     }
 }
-/*è¡ãéÉ{É^Éì*/
+/*Ê∂àÂéª„Éú„Çø„É≥*/
 void CMainWindow::OnClearButton()
 {
     ClearListView();
     ClearListBox();
-    if (m_mouse_record != nullptr)
+    if (m_pMouseRecorder != nullptr)
     {
-        m_mouse_record->ClearRecord();
+        m_pMouseRecorder->ClearRecord();
     }
 }
-/*ï€ë∂É{É^Éì*/
+/*‰øùÂ≠ò„Éú„Çø„É≥*/
 void CMainWindow::OnSaveButton()
 {
-    wchar_t* buffer = SelectTextFileToSave();
-    if (buffer != nullptr)
+    std::wstring wstrFileToSave = win_dialogue::SelectSaveFile(L"ÊñáÊõ∏ÂΩ¢Âºè", L"*.txt;*.bin;*.dat;", L"1.txt", m_hWnd);
+    if (!wstrFileToSave.empty())
     {
-        int len = ::WideCharToMultiByte(CP_OEMCP, 0, buffer, static_cast<int>(wcslen(buffer)), nullptr, 0, nullptr, nullptr);
-        if (len > 0)
+        std::string str = win_text::NarrowUtf8(wstrFileToSave);
+        if (m_pMouseRecorder != nullptr)
         {
-            std::string str(len, 0);
-            ::WideCharToMultiByte(CP_OEMCP, 0, buffer, static_cast<int>(wcslen(buffer)), &str[0], len, nullptr, nullptr);
-            AddMessageToListBox(std::string("File directory: ").append(str).c_str());
-            if (m_mouse_record != nullptr)
+            bool bRet = m_pMouseRecorder->SaveRecord(str.c_str());
+            if (bRet)
             {
-                bool bRet = m_mouse_record->SaveRecord(str.c_str());
-                if (bRet)
-                {
-                    AddMessageToListBox("Saved the record successfully");
-                    ClearListView();
-                }
-                else
-                {
-                    AddMessageToListBox("Failed to save record.");
-                }
+                AddMessageToListBox("Saved the record successfully");
+                ClearListView();
+            }
+            else
+            {
+                AddMessageToListBox("Failed to save record.");
             }
         }
-        ::CoTaskMemFree(buffer);
+
     }
 }
-/*çƒê∂É{É^Éì*/
+/*ÂÜçÁîü„Éú„Çø„É≥*/
 void CMainWindow::OnReplayButton()
 {
-    wchar_t* buffer = SelectTextFileToOpen();
-    if (buffer != nullptr)
+    std::wstring wstrFileToOpen = win_dialogue::SelectOpenFile(L"ÊñáÊõ∏ÂΩ¢Âºè", L"*.txt;*.bin;*.dat;", m_hWnd);
+    if (!wstrFileToOpen.empty())
     {
-        int len = ::WideCharToMultiByte(CP_OEMCP, 0, buffer, static_cast<int>(wcslen(buffer)), nullptr, 0, nullptr, nullptr);
-        if (len > 0)
+        std::string str = win_text::NarrowUtf8(wstrFileToOpen);
+        AddMessageToListBox(std::string("Opens file: ").append(str).c_str());
+        if (m_pMouseReplayer != nullptr)
         {
-            std::string str(len, 0);
-            ::WideCharToMultiByte(CP_OEMCP, 0, buffer, static_cast<int>(wcslen(buffer)), &str[0], len, nullptr, nullptr);
-            AddMessageToListBox(std::string("Opens file: ").append(str).c_str());
-            if (m_mouse_replay != nullptr)
+            bool bRet = m_pMouseReplayer->StartReplay(str.c_str());
+            if (bRet)
             {
-                bool bRet = m_mouse_replay->StartReplay(str.c_str());
-                if (bRet)
-                {
-                    m_mode = Mode::Replaying;
-                    SwitchButton();
-                }
-                else
-                {
-                    AddMessageToListBox("Failed to load record file.");
-                }
+                m_mode = Mode::Replaying;
+                SwitchButton();
+            }
+            else
+            {
+                AddMessageToListBox("Failed to load record file.");
             }
         }
-        ::CoTaskMemFree(buffer);
     }
 }
-/*ãLò^ç¿ïWë}ì¸*/
+/*Ë®òÈå≤Â∫ßÊ®ôÊåøÂÖ•*/
 void CMainWindow::InsertCoordinateToListView(WPARAM wParam, LPARAM lParam)
 {
     if (m_hListView != nullptr)
@@ -489,7 +490,7 @@ void CMainWindow::InsertCoordinateToListView(WPARAM wParam, LPARAM lParam)
         }
     }
 }
-/*ÉäÉXÉgçÄñ⁄è¡ãé*/
+/*„É™„Çπ„ÉàÈ†ÖÁõÆÊ∂àÂéª*/
 void CMainWindow::ClearListView()
 {
     if (m_hListView != nullptr)
@@ -497,23 +498,23 @@ void CMainWindow::ClearListView()
         ListView_DeleteAllItems(m_hListView);
     }
 }
-/*âÊñ í ím*/
+/*ÁîªÈù¢ÈÄöÁü•*/
 void CMainWindow::AddMessageToListBox(const char* message)
 {
     if (m_hListBox != nullptr)
     {
         char stamp[16];
         SYSTEMTIME tm;
-        GetLocalTime(&tm);
+        ::GetLocalTime(&tm);
         sprintf_s(stamp, "%02d:%02d:%02d:%03d ", tm.wHour, tm.wMinute, tm.wSecond, tm.wMilliseconds);
-        SendMessageA(m_hListBox, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(std::string(stamp).append(message).c_str()));
+        ::SendMessageA(m_hListBox, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(std::string(stamp).append(message).c_str()));
     }
 }
-/*í ímçÌèú*/
+/*ÈÄöÁü•ÂâäÈô§*/
 void CMainWindow::ClearListBox()
 {
     if (m_hListBox != nullptr)
     {
-        SendMessage(m_hListBox, LB_RESETCONTENT, 0, 0);
+        ::SendMessage(m_hListBox, LB_RESETCONTENT, 0, 0);
     }
 }

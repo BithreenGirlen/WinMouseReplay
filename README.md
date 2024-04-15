@@ -1,47 +1,58 @@
 # WinMouseReplay
-Simple mouse-left-click record/replay using Win32API.
+Mouse left-click and drag replay using Win32API
 
- This is useful when
-- Just left click input is enough, no need to record/replay other mouse or keyboard inputs.
-- You want to know the position to be clicked in replaying, though in recording you do not want to click.
+## Demonstration
 
-## Feature
+https://github.com/BithreenGirlen/WinMouseReplay/assets/152838289/f0694323-055c-43a6-b8a8-3e35c5082fe6
 
-- Easy modification
-  - The record file is simple text file, so you can easily modify it by manual typing.
-- Loose restriction
-  - You can do other tasks during replaying if the interval is not too short. 
+## Button functions
 
-## How to use
+![000](https://github.com/BithreenGirlen/WinMouseReplay/assets/152838289/4844bbfe-a876-4783-b576-c8184f199bdf)
 
-### Record
+| Button  | Action  |
+| --- | --- |
+| Record | Starts recording. |
+| Save | Opens file-save-dialogue to write records. |
+| Replay | Opens dialogue to select a record file to start replaying.  |
+| Clear | Clears the records in memory and messages on the window.|
 
-1. Click "Record" button on the window.
-2. Press "insert" key leaving the mouse cursor on the position where to be clicked in replaying.
-3. Press "delete" key when you want to stop recording.
-4. Click "Save" button on the window, and then type file name.
+## Key functions
 
-The record file will be written like this: _1.txt_
+| Input  | Action  |
+| --- | --- |
+| Insert | Records mouse position and the time passed since the last record. |
+| Delete | Ends recording. |
+| Shift + Delete | Ends replaying. |
+
+To receive `Shift` + `Delete` input with the window unfocussed, the application registers hot-key. If this registration conficts with other applications, a message box appears when launching.
+
+![002](https://github.com/BithreenGirlen/WinMouseReplay/assets/152838289/5a2ca20d-2ff4-49c9-bd49-1e1a0860d54d)
+
+## Record file format
+
+The record file is composed of mouse position(`X` and `Y`), elapsed time(`D`), and input type(`E`).
 <pre>
-X:900, Y:398, D:2630;
-X:1065, Y:674, D:1270;
-X:1110, Y:666, D:5980;
-X:931, Y:611, D:29703;
-X:1071, Y:695, D:10;
-X:1094, Y:609, D:624;
-X:939, Y:568, D:424;
+X:1185, Y:557, D:756, E:0;
+X:960, Y:546, D:943, E:0;
+X:994, Y:565, D:100, E:1;
+X:998, Y:656, D:100, E:1;
+X:998, Y:656, D:0, E:0;
+X:949, Y:656, D:100, E:0;
+X:983, Y:614, D:100, E:0;
+X:942, Y:562, D:879, E:0;
 </pre>
 
-`X` and `Y` are coordinates, and `D` is the time in milliseconds passed from the previous input.
+| Input type  | Meaning  |
+| --- | --- |
+| 0 | Left-click. |
+| 1 | Left being pressed. |
 
-The record feature can be used just to know the position of the mouse, for example, to modify the previously created record, or to know the area you want to avoid clicking.
+Here `D:0` means setting minimum interval timer.  
+So the following records mean dragging start at the position of (994, 565), then release at (998, 656).
+<pre>
+X:994, Y:565, D:100, E:1;
+X:998, Y:656, D:100, E:1;
+X:998, Y:656, D:0, E:0;
+</pre>
 
-### Replay
-
-1. Click "Replay" button on the window.
-2. Select the record file to replay.
-3. Press "shift" + "delete" when you stop replaying.
-
-## Remarks
-Stopping replaying uses hot-key registration. If the registraion would conflict with other applications, a message box would appear.  
-"Clear" button clears the reocrd in memory and messages on the window.
+Unfortunately, the application always creates record file with input type 0. So dragging can be achived only by manual modification of the record file.

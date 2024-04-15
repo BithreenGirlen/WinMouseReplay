@@ -1,49 +1,63 @@
-#ifndef MOUSE_REPLAY_H_
+﻿#ifndef MOUSE_REPLAY_H_
 #define MOUSE_REPLAY_H_
 
 #include <Windows.h>
 
 #include <vector>
 
+namespace replay_event
+{
+    enum
+    {
+        LeftClick,
+        LeftDrag
+    };
+}
+
+struct SMouseRecord
+{
+    POINT point{};
+    long long nDelay = 900;
+    unsigned int ulEvent = 0;
+};
+
 class CMouseReplay
 {
 public:
-	CMouseReplay(HWND hWnd);
-	~CMouseReplay();
-	bool StartReplay(const char* file_name);
-	void EndReplay();
+    CMouseReplay(HWND hWnd);
+    ~CMouseReplay();
+    bool StartReplay(const char* pzFileName);
+    void EndReplay();
 private:
-	HANDLE m_hEvent = nullptr;
-	HANDLE m_hThread = INVALID_HANDLE_VALUE;
-	bool m_thread_running = false;
-	HWND m_hRetWnd = nullptr;
+    HANDLE m_hEvent = nullptr;
+    HANDLE m_hThread = INVALID_HANDLE_VALUE;
+    bool m_bThreadRunning = false;
+    HWND m_hRetWnd = nullptr;
 
-	std::vector<POINT> m_point;
-	std::vector<long long> m_delay;
+    std::vector<SMouseRecord> m_records;
+    size_t m_nRecordIndex = 0;
 
-	bool LoadRecordFile(const char* file_name);
-	bool RestoreRecord(char* raw);
-	void ClearRecord();
+    bool LoadRecordFile(const char* pzFileName);
+    bool RestoreRecord(const char* pzRecordLines);
+    void ClearRecord();
 
-	static void ThreadLauncher(void* args);
-	void ReplayingThread();
+    static void ThreadLauncher(void* args);
+    void ReplayingThread();
 
-	size_t m_index = 0;
-
-	static void CALLBACK TimerCallback(PTP_CALLBACK_INSTANCE Instance, PVOID Context, PTP_TIMER Timer);
+    static void CALLBACK TimerCallback(PTP_CALLBACK_INSTANCE Instance, PVOID Context, PTP_TIMER Timer);
 };
 
 namespace wm_mouse_replay
 {
-	namespace out
-	{
-		enum
-		{
-			Start = WM_USER + 200,
-			End,
-			Shift,
-		};
-	}
+    namespace out
+    {
+        enum
+        {
+            Start = WM_USER + 200,
+            End,
+            Shift,
+        };
+    }
 }
 
 #endif //MOUSE_REPLAY_H_
