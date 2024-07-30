@@ -6,25 +6,25 @@
 #include <vector>
 #include <string>
 
+#include "input_base.h"
+
 class CMouseRecord
 {
 public:
     CMouseRecord(HWND hWnd);
     ~CMouseRecord();
     bool StartRecording();
-    bool SaveRecord(const char* pzFileName);
+    bool SaveRecord(const wchar_t* pwzFilePath);
     void ClearRecord();
 private:
     HANDLE m_hThread = INVALID_HANDLE_VALUE;
     bool m_bThreadRunning = false;
     HWND m_hRetWnd = nullptr;
 
-    std::vector<POINT> m_points;
-    std::vector<long long> m_nDelay;
+    std::vector<input_base::SMouseRecord> m_records;
 
     void EndRecording();
 
-    static void ThreadLauncher(void* args);
     void RecordingThread();
 
     bool CheckKey(short key_code);

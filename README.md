@@ -1,58 +1,48 @@
 # WinMouseReplay
-Mouse left-click and drag replay using Win32API
+Simple left mouse button replay using Win32API.
+
+ This is useful when
+- Just left-click is enough, no need to record/replay other mouse or keyboard inputs.
+- You want to know the position to be clicked in replaying, but avoid actual clicking in recording.
 
 ## Demonstration
 
 https://github.com/BithreenGirlen/WinMouseReplay/assets/152838289/f0694323-055c-43a6-b8a8-3e35c5082fe6
 
-## Button functions
+## How to use
 
 ![000](https://github.com/BithreenGirlen/WinMouseReplay/assets/152838289/4844bbfe-a876-4783-b576-c8184f199bdf)
 
-| Button  | Action  |
-| --- | --- |
-| Record | Starts recording. |
-| Save | Opens file-save-dialogue to write records. |
-| Replay | Opens dialogue to select a record file to start replaying.  |
-| Clear | Clears the records in memory and messages on the window.|
+### Record
 
-## Key functions
+1. `Record` button to start recording.
+2. `Insert` key to record the position to be clicked; `R-Shift` + `Insert` key to record the position to start/end dragging.
+3. `Delete` key to stop recording.
+4. `Save` button to write records into a file through file-select-dialogue.
 
-| Input  | Action  |
-| --- | --- |
-| Insert | Records mouse position and the time passed since the last record. |
-| Delete | Ends recording. |
-| Shift + Delete | Ends replaying. |
+### Replay
 
-To receive `Shift` + `Delete` input with the window unfocussed, the application registers hot-key. If this registration conficts with other applications, a message box appears when launching.
+1. `Replay` button to select a record file to replay through file-select-dialogue.
+2. `Shift` + `Delete` key to stop replaying.
 
-![002](https://github.com/BithreenGirlen/WinMouseReplay/assets/152838289/5a2ca20d-2ff4-49c9-bd49-1e1a0860d54d)
+To receive `Shift` + `Delete` input with the window unfocussed, the application registers hot-key. If this registration conficts with other applications, a message box appears.
+
 
 ## Record file format
 
-The record file is composed of mouse position(`X` and `Y`), elapsed time(`D`), and input type(`E`).
+The record file is composed of mouse position(`X` and `Y`), elapsed time(`D`) since the previous record, and input type(`E`).
 <pre>
 X:1185, Y:557, D:756, E:0;
 X:960, Y:546, D:943, E:0;
 X:994, Y:565, D:100, E:1;
-X:998, Y:656, D:100, E:1;
-X:998, Y:656, D:0, E:0;
+X:998, Y:656, D:100, E:2;
 X:949, Y:656, D:100, E:0;
 X:983, Y:614, D:100, E:0;
 X:942, Y:562, D:879, E:0;
 </pre>
 
-| Input type  | Meaning  |
+| E value | Meaning  |
 | --- | --- |
-| 0 | Left-click. |
-| 1 | Left being pressed. |
-
-Here `D:0` means setting minimum interval timer.  
-So the following records mean dragging start at the position of (994, 565), then release at (998, 656).
-<pre>
-X:994, Y:565, D:100, E:1;
-X:998, Y:656, D:100, E:1;
-X:998, Y:656, D:0, E:0;
-</pre>
-
-Unfortunately, the application always creates record file with input type 0. So dragging can be achived only by manual modification of the record file.
+| 0 | Left click. |
+| 1 | Left drag start. |
+| 2 | Left drag end. |

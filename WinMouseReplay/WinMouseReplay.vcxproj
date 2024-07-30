@@ -127,19 +127,24 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="common_control_utility.h" />
     <ClInclude Include="framework.h" />
+    <ClInclude Include="input_base.h" />
     <ClInclude Include="main_window.h" />
     <ClInclude Include="mouse_record.h" />
     <ClInclude Include="mouse_replay.h" />
     <ClInclude Include="win_dialogue.h" />
+    <ClInclude Include="win_filesystem.h" />
     <ClInclude Include="win_text.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="common_control_utility.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="main_window.cpp" />
     <ClCompile Include="mouse_record.cpp" />
     <ClCompile Include="mouse_replay.cpp" />
     <ClCompile Include="win_dialogue.cpp" />
+    <ClCompile Include="win_filesystem.cpp" />
     <ClCompile Include="win_text.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

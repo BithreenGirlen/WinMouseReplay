@@ -1,10 +1,8 @@
 ﻿
-#include <process.h>
-
 #include "mouse_replay.h"
+#include "win_filesystem.h"
 
-CMouseReplay::CMouseReplay(HWND hWnd)
-    :m_hRetWnd(hWnd)
+CMouseReplay::CMouseReplay()
 {
 
 }
@@ -14,31 +12,15 @@ CMouseReplay::~CMouseReplay()
     EndReplay();
 }
 /*再現開始*/
-bool CMouseReplay::StartReplay(const char* pzFileName)
+bool CMouseReplay::StartReplay(const wchar_t* pwzFilePath)
 {
-    if (m_records.empty())
+    EndReplay();
+
+    bool bRet = LoadRecordFile(pwzFilePath);
+    if (bRet)
     {
-        if (LoadRecordFile(pzFileName))
-        {
-            if (m_hEvent == nullptr)
-            {
-                m_hEvent = ::CreateEvent(nullptr, FALSE, FALSE, nullptr);
-                if (m_hEvent != nullptr)
-                {
-                    if (m_hThread == INVALID_HANDLE_VALUE)
-                    {
-                        m_hThread = reinterpret_cast<HANDLE>(_beginthread(&ThreadLauncher, 0, this));
-                        if (m_hThread != INVALID_HANDLE_VALUE)
-                        {
-                            m_bThreadRunning = true;
-                            return true;
-                        }
-                    }
-                }
-            }
-            /*失敗*/
-            EndReplay();
-        }
+        StartThreadpoolTimer();
+        return true;
     }
 
     return false;
@@ -46,46 +28,18 @@ bool CMouseReplay::StartReplay(const char* pzFileName)
 /*再現終了*/
 void CMouseReplay::EndReplay()
 {
-    if (m_hThread != INVALID_HANDLE_VALUE)
-    {
-        m_bThreadRunning = false;
-        if (m_hEvent != nullptr)
-        {
-            ::SetEvent(m_hEvent);
-            ::WaitForSingleObject(m_hThread, INFINITE);
-        }
-    }
+    EndThreadpoolTimer();
+    ClearRecord();
 }
-/*ファイル読み込み*/
-bool CMouseReplay::LoadRecordFile(const char* pzFileName)
+/*記録読み込み*/
+bool CMouseReplay::LoadRecordFile(const wchar_t* pwzFilePath)
 {
-    bool bResult = false;
-
-    HANDLE hFile = ::CreateFileA(pzFileName, GENERIC_READ, 0, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
-    if (hFile != INVALID_HANDLE_VALUE)
+    std::string strFile = win_filesystem::LoadFileAsString(pwzFilePath);
+    if (!strFile.empty())
     {
-        DWORD dwSize = ::GetFileSize(hFile, nullptr);
-        if (dwSize != INVALID_FILE_SIZE)
-        {
-            char* pBuffer = static_cast<char*>(malloc(static_cast<size_t>(dwSize)));
-            if (pBuffer != nullptr)
-            {
-                DWORD dwRead = 0;
-                BOOL iRet = ::ReadFile(hFile, pBuffer, dwSize, &dwRead, nullptr);
-                if (iRet)
-                {
-                    bool bRet = RestoreRecord(pBuffer);
-                    if (bRet)
-                    {
-                        bResult = true;
-                    }
-                }
-                free(pBuffer);
-            }
-        }
-        ::CloseHandle(hFile);
+        return RestoreRecord(strFile.c_str());
     }
-    return bResult;
+    return false;
 }
 /*記録復元*/
 bool CMouseReplay::RestoreRecord(const char* pzRecordLines)
@@ -118,7 +72,7 @@ bool CMouseReplay::RestoreRecord(const char* pzRecordLines)
         p = strstr(pp, "\r\n");
         if (p == nullptr)break;
 
-        SMouseRecord s{};
+        input_base::SMouseRecord s{};
         long lValue = -1;
 
         std::vector<char> bufs;
@@ -148,66 +102,99 @@ bool CMouseReplay::RestoreRecord(const char* pzRecordLines)
 
     return !m_records.empty();
 }
-
+/*記録消去*/
 void CMouseReplay::ClearRecord()
 {
     m_records.clear();
     m_nRecordIndex = 0;
 }
-
-void CMouseReplay::ThreadLauncher(void* args)
+/*押下状態解除*/
+void CMouseReplay::ResetMouseState()
 {
-    static_cast<CMouseReplay*>(args)->ReplayingThread();
+    INPUT input{};
+    input.type = INPUT_MOUSE;
+    input.mi.dwFlags = MOUSEEVENTF_LEFTUP;
+    ::SendInput(1, &input, sizeof(input));
 }
 
-void CMouseReplay::ReplayingThread()
+void CMouseReplay::StartThreadpoolTimer()
 {
-    if (m_hRetWnd != nullptr)
+    if (m_pTpTimer != nullptr)return;
+
+    m_pTpTimer = ::CreateThreadpoolTimer(TimerCallback, this, nullptr);
+    if (m_pTpTimer != nullptr)
     {
-        ::PostMessageW(m_hRetWnd, wm_mouse_replay::out::Start, 0, 0);
+        UpdateTimerInterval(m_pTpTimer);
+    }
+}
+
+void CMouseReplay::EndThreadpoolTimer()
+{
+    if (m_pTpTimer != nullptr)
+    {
+        ::SetThreadpoolTimer(m_pTpTimer, nullptr, 0, 0);
+        ::WaitForThreadpoolTimerCallbacks(m_pTpTimer, TRUE);
+        ::CloseThreadpoolTimer(m_pTpTimer);
+        m_pTpTimer = nullptr;
+
+        ResetMouseState();
+    }
+}
+
+void CMouseReplay::UpdateTimerInterval(PTP_TIMER timer)
+{
+    if (timer != nullptr)
+    {
+        FILETIME sFileDueTime{};
+        ULARGE_INTEGER ulDueTime{};
+        ulDueTime.QuadPart = static_cast<ULONGLONG>(-(1LL * 10 * 1000 * m_records.at(m_nRecordIndex).nDelay));
+        sFileDueTime.dwHighDateTime = ulDueTime.HighPart;
+        sFileDueTime.dwLowDateTime = ulDueTime.LowPart;
+        ::SetThreadpoolTimer(timer, &sFileDueTime, 0, 0);
+    }
+}
+
+void CMouseReplay::OnTide()
+{
+    const input_base::SMouseRecord& s = m_records.at(m_nRecordIndex);
+    ::SetCursorPos(s.point.x, s.point.y);
+
+    INPUT input{};
+    input.type = INPUT_MOUSE;
+
+    if (s.ulEvent == input_base::replay_event::LeftClick)
+    {
+        input.mi.dwFlags = MOUSEEVENTF_LEFTUP | MOUSEEVENTF_LEFTDOWN;
+    }
+    else if (s.ulEvent == input_base::replay_event::LeftDragStart)
+    {
+        /*
+        * If no time is put between ::SetCursorPos() and ::SendInput(), dragging does not work stably.
+        * But not sure on what parameters the dragging depends;
+        * none of the following system parameters seems relevant.
+        *
+        * UINT uiDoubleClickTime = ::GetDoubleClickTime()
+        * UINT dwHoverTime = 0;
+        * ::SystemParametersInfoA(SPI_GETMOUSEHOVERTIME, 0, &dwHoverTime, 0);
+        * DWORD dwSingleClickTime = 0;
+        * ::SystemParametersInfoA(SPI_GETMOUSECLICKLOCKTIME, 0, &dwSingleClickTime, 0);
+        *
+        * And occasionally minimum interval of threadpool timer or that of ::Sleep() is not sufficient.
+        * So here I set a bit longer ::Sleep() than the minimum interval.
+        */
+        ::Sleep(20);
+        input.mi.dwFlags = MOUSEEVENTF_LEFTDOWN;
+    }
+    else if (s.ulEvent == input_base::replay_event::LeftDragEnd)
+    {
+        ::Sleep(20);
+        input.mi.dwFlags = MOUSEEVENTF_LEFTUP;
     }
 
-    if (!m_records.empty())
-    {
-        PTP_TIMER pTimer = ::CreateThreadpoolTimer(TimerCallback, this, nullptr);
-        if (pTimer != nullptr)
-        {
-            FILETIME sFileDueTime{};
-            ULARGE_INTEGER ulDueTime{};
-            ulDueTime.QuadPart = static_cast<ULONGLONG>(-(1LL * 10 * 1000 * m_records.at(0).nDelay));
-            sFileDueTime.dwHighDateTime = ulDueTime.HighPart;
-            sFileDueTime.dwLowDateTime = ulDueTime.LowPart;
-            ::SetThreadpoolTimer(pTimer, &sFileDueTime, 0, 0);
+    ::SendInput(1, &input, sizeof(input));
 
-            for (;;)
-            {
-                if(::WaitForSingleObject(m_hEvent, INFINITE) == WAIT_FAILED)break;
-                if (!m_bThreadRunning)break;
-            }
-
-            ::SetThreadpoolTimer(pTimer, nullptr, 0, 0);
-            ::WaitForThreadpoolTimerCallbacks(pTimer, TRUE);
-            ::CloseThreadpoolTimer(pTimer);
-
-            INPUT input{};
-            input.type = INPUT_MOUSE;
-            input.mi.dwFlags = MOUSEEVENTF_LEFTUP;
-            ::SendInput(1, &input, sizeof(input));
-        }
-    }
-
-    if (m_hRetWnd != nullptr)
-    {
-        ::PostMessageW(m_hRetWnd, wm_mouse_replay::out::End, 0, 0);
-    }
-
-    ClearRecord();
-    if (m_hEvent != nullptr)
-    {
-        ::CloseHandle(m_hEvent);
-        m_hEvent = nullptr;
-    }
-    m_hThread = INVALID_HANDLE_VALUE;
+    ++m_nRecordIndex;
+    if (m_nRecordIndex > m_records.size() - 1)m_nRecordIndex = 0;
 }
 
 void CMouseReplay::TimerCallback(PTP_CALLBACK_INSTANCE Instance, PVOID Context, PTP_TIMER Timer)
@@ -215,28 +202,7 @@ void CMouseReplay::TimerCallback(PTP_CALLBACK_INSTANCE Instance, PVOID Context, 
     CMouseReplay* pThis = static_cast<CMouseReplay*>(Context);
     if (pThis != nullptr)
     {
-        const SMouseRecord& s = pThis->m_records.at(pThis->m_nRecordIndex);
-        ::SetCursorPos(s.point.x, s.point.y);
-
-        INPUT input{};
-        input.type = INPUT_MOUSE;
-        input.mi.dwFlags = MOUSEEVENTF_LEFTDOWN;
-
-        if (s.ulEvent != replay_event::LeftDrag)
-        {
-            input.mi.dwFlags |= MOUSEEVENTF_LEFTUP;
-        }
-        ::SendInput(1, &input, sizeof(input));
-
-        ++pThis->m_nRecordIndex;
-        if (pThis->m_nRecordIndex > pThis->m_records.size() - 1)pThis->m_nRecordIndex = 0;
-
-        FILETIME sFileDueTime{};
-        ULARGE_INTEGER ulDueTime{};
-        ulDueTime.QuadPart = static_cast<ULONGLONG>(-(1LL *10 * 1000 * pThis->m_records.at(pThis->m_nRecordIndex).nDelay));
-        sFileDueTime.dwHighDateTime = ulDueTime.HighPart;
-        sFileDueTime.dwLowDateTime = ulDueTime.LowPart;
-
-        ::SetThreadpoolTimer(Timer, &sFileDueTime, 0, 0);
+        pThis->OnTide();
+        pThis->UpdateTimerInterval(Timer);
     }
 }

@@ -29,7 +29,7 @@ private:
     LRESULT OnClose();
     LRESULT OnPaint();
     LRESULT OnSize();
-    LRESULT OnCommand(WPARAM wParam);
+    LRESULT OnCommand(WPARAM wParam, LPARAM lParam);
     LRESULT OnHotKey(WPARAM wParam, LPARAM lParam);
 
     enum Constants { kHotKeyId = 1, kFontSize = 14, kButtonWidth = 70 };
@@ -46,13 +46,6 @@ private:
     HWND m_hSaveButton = nullptr;
     HWND m_hReplayButton = nullptr;
 
-    void GetClientAreaSize(long& width, long& height);
-    void ResizeListView();
-    void ResizeListBox();
-    void ResizeRecordButton();
-    void ResizeClearButton();
-    void ResizeSaveButton();
-    void ResizeReplayButton();
     static BOOL CALLBACK SetFontCallback(HWND hWnd, LPARAM lParam);
 
     bool m_bHotKeyRegistered = false;
@@ -68,9 +61,7 @@ private:
     CMouseReplay* m_pMouseReplayer = nullptr;
 
     void InsertCoordinateToListView(WPARAM wParam, LPARAM lParam);
-    void ClearListView();
     void AddMessageToListBox(const char* message);
-    void ClearListBox();
 };
 
 #endif //MAIN_WINDOW_H_

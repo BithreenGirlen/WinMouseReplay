@@ -2,6 +2,7 @@
 #include <process.h>
 
 #include "mouse_record.h"
+#include "win_filesystem.h"
 
 CMouseRecord::CMouseRecord(HWND hWnd)
     :m_hRetWnd(hWnd)
@@ -16,55 +17,53 @@ CMouseRecord::~CMouseRecord()
 
 bool CMouseRecord::StartRecording()
 {
-    if (m_hThread == INVALID_HANDLE_VALUE)
-    {
-        m_hThread = reinterpret_cast<HANDLE>(_beginthread(&ThreadLauncher, 0, this));
-        if (m_hThread != INVALID_HANDLE_VALUE)
-        {
-            m_bThreadRunning = true;
-            return true;
-        }
-    }
-    /*失敗*/
     EndRecording();
 
-    return false;
+    const auto ThreadLauncher = [](void* args)
+        -> void
+        {
+            static_cast<CMouseRecord*>(args)->RecordingThread();
+        };
+
+    m_hThread = reinterpret_cast<HANDLE>(_beginthread(ThreadLauncher, 0, this));
+    return m_hThread != INVALID_HANDLE_VALUE;
 }
 
 /*記録保存*/
-bool CMouseRecord::SaveRecord(const char* pzFileName)
+bool CMouseRecord::SaveRecord(const wchar_t* pwzFilePath)
 {
-    if (pzFileName != nullptr)
+    if (pwzFilePath != nullptr && !m_records.empty())
     {
-        HANDLE hFile = ::CreateFileA(pzFileName, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
-        if (hFile != INVALID_HANDLE_VALUE)
+        std::string strFile;
+        strFile.reserve(m_records.size() * 64);
+        for (const auto& record : m_records)
         {
-            ::SetFilePointer(hFile, NULL, nullptr, FILE_END);
-            for (size_t i = 0; i < m_points.size(); ++i)
+            char sBuffer[256]{};
+            int iLen = sprintf_s(sBuffer, sizeof(sBuffer), "X:%ld, Y:%ld, D:%lld, E:%u;\r\n", record.point.x, record.point.y, record.nDelay, record.ulEvent);
+            if (iLen > 0)
             {
-                char sBuffer[256]{};
-                sprintf_s(sBuffer, "X:%ld, Y:%ld, D:%lld, E:%u;\r\n", m_points.at(i).x, m_points.at(i).y, m_nDelay.at(i), 0);
-                DWORD bytesWrite = 0;
-                BOOL bRet = ::WriteFile(hFile, sBuffer, static_cast<DWORD>(strlen(sBuffer)), &bytesWrite, nullptr);
-                if (!bRet)
-                {
-                    ::CloseHandle(hFile);
-                    return false;
-                }
+                strFile += sBuffer;
             }
-            ::CloseHandle(hFile);
-            ClearRecord();
-            return true;
+        }
+
+        if (!strFile.empty())
+        {
+            bool bRet =  win_filesystem::SaveStringToFile(pwzFilePath, strFile.data(), static_cast<DWORD>(strFile.size()));
+            if (bRet)
+            {
+                ClearRecord();
+                return true;
+            }
         }
     }
+
     return false;
 }
 
 /*記録消去*/
 void CMouseRecord::ClearRecord()
 {
-    m_points.clear();
-    m_nDelay.clear();
+    m_records.clear();
 }
 
 void CMouseRecord::EndRecording()
@@ -76,13 +75,10 @@ void CMouseRecord::EndRecording()
     }
 }
 
-void CMouseRecord::ThreadLauncher(void* args)
-{
-    static_cast<CMouseRecord*>(args)->RecordingThread();
-}
-
 void CMouseRecord::RecordingThread()
 {
+    m_bThreadRunning = true;
+
     if (m_hRetWnd != nullptr)
     {
         ::PostMessageW(m_hRetWnd, wm_mouse_record::out::Start, 0, 0);
@@ -90,22 +86,34 @@ void CMouseRecord::RecordingThread()
 
     long long last = GetNowTime();
 
+    bool bToBeDragged = false;
     for (;;)
     {
         if (!m_bThreadRunning)break;
         bool bRet = CheckKey(VK_INSERT);
         if (bRet)
         {
-            POINT P {};
-            ::GetCursorPos(&P);
-            m_points.push_back(P);
+            input_base::SMouseRecord record;
+            ::GetCursorPos(&record.point);
 
             long long now = GetNowTime();
-            m_nDelay.push_back(now - last);
+            record.nDelay = now - last;
+
+            if (::GetKeyState(VK_RSHIFT) & 0x8000)
+            {
+                bToBeDragged ^= true;
+                record.ulEvent = bToBeDragged ? input_base::replay_event::LeftDragStart : input_base::replay_event::LeftDragEnd;
+            }
+            else
+            {
+                record.ulEvent = input_base::replay_event::LeftClick;
+            }
+
+            m_records.push_back(record);
             last = now;
             if (m_hRetWnd != nullptr)
             {
-                ::PostMessageW(m_hRetWnd, wm_mouse_record::out::Record, m_points.size(), reinterpret_cast<LPARAM>(&m_points.back()));
+                ::PostMessageW(m_hRetWnd, wm_mouse_record::out::Record, m_records.size(), reinterpret_cast<LPARAM>(&m_records.back().point));
             }
         }
         bRet = CheckKey(VK_DELETE);
